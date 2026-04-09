@@ -1,0 +1,493 @@
+services:
+  # PUBLIC NETWORK
+  npm:
+    container_name: npm
+    environment:
+      TZ: Europe/Lisbon
+    image: jc21/nginx-proxy-manager:latest
+    networks:
+      public:
+        ipv4_address: 10.53.0.2
+      services:
+        ipv4_address: 10.52.0.2
+    ports:
+      - 80:80
+      - 81:81
+      - 443:443
+    restart: unless-stopped
+    volumes:
+      - ${NPM_DATA_DIR:-.npm/data}:/data
+      - ${NPM_CERTIFICATE_DIR:-.npm/certs}:/etc/letsencrypt
+  # SERVICES NETWORK
+  # digger:
+  #   build:
+  #     context: ./digger
+  #     dockerfile: Digger/Dockerfile
+  #   container_name: digger
+  #   depends_on:
+  #     - transmission
+  #   environment:
+  #     Logging__Level__Default: Warning
+  #     Logging__Level__Microsoft: Warning
+  #     Logging__LogLevel__Microsoft_Hosting_Lifetime: Warning
+  #     Logging__LogLevel__Microsoft__EntityFrameworkCore__Database__Command: Warning
+  #   networks:
+  #     services:
+  #       ipv4_address: 10.52.0.3
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ${TRANSMISSION_DOWNLOADS_DIR:-.transmission/downloads}/movies:/downloads/movies:rw
+  #     - ${DIGGER_DATA_DIR:-.digger/data}:/digger/data
+  frigate:
+    container_name: frigate
+    environment:
+      FRIGATE_RTSP_PASSWORD: ${FRIGATE_PASSWORD:-frigate}
+    image: ghcr.io/blakeblackshear/frigate:stable
+    networks:
+      services:
+        ipv4_address: 10.52.0.4
+    ports:
+      - 8971:8971
+      - 8554:8554
+      - 8555:8555/tcp
+      - 8555:8555/udp
+      - 5000:5000
+    restart: unless-stopped
+    shm_size: "512mb"
+    user: 0:0
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${FRIGATE_CONFIG_DIR:-.frigate/config}:/config
+      - ${FRIGATE_MEDIA_DIR:-.frigate/media}:/media/frigate
+  gitea:
+    container_name: gitea
+    depends_on:
+      - postgres
+    image: docker.gitea.com/gitea:1.25.2
+    networks:
+      services:
+        ipv4_address: 10.52.0.5
+      data:
+        ipv4_address: 10.50.0.8
+    ports:
+      - 3000:3000
+      - 222:222
+    restart: unless-stopped
+    volumes:
+      - ${GITEA_DATA_DIR:-.gitea/data}:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+  gitea-runner:
+    container_name: gitea-runner
+    environment:
+      GITEA_INSTANCE_URL: ${GITEA_INSTANCE_URL:-http://localhost:3000}
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_REGISTRATION_TOKEN:-bW81f9y0Ed7CWoG56R92CgzJioesFpzHIFtZOK8r}
+      GITEA_RUNNER_NAME: ${GITEA_RUNNER_NAME:-gitea-runner}
+    image: docker.io/gitea/act_runner:nightly
+    networks:
+      services:
+        ipv4_address: 10.52.0.6
+    user: 0:0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    networks:
+      data:
+        ipv4_address: 10.50.0.12
+      messaging:
+        ipv4_address: 10.51.0.6
+      services:
+        ipv4_address: 10.52.0.7
+    ports:
+      - 8123:8123
+    restart: unless-stopped
+    volumes:
+      - ${HOMEASSISTANT_CONFIG_DIR:-.homeassistant/config}:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+  jellyfin:
+    container_name: jellyfin
+    environment:
+      - JELLYFIN_PublishedServerUrl=${JELLYFIN_SERVER_URL:-http://localhost:8096}
+    image: jellyfin/jellyfin
+    networks:
+      services:
+        ipv4_address: 10.52.0.8
+    ports:
+      - 8096:8096/tcp
+      - 7359:7359/udp
+    restart: unless-stopped
+    user: 0:0
+    volumes:
+      - ${JELLYFIN_CONFIG_DIR:-.jellyfin/config}:/config
+      - ${JELLYFIN_CACHE_DIR:-.jellyfin/cache}:/cache
+      - ${JELLYFIN_MEDIA_DIR:-.jellyfin/media}:/media
+  n8n:
+    container_name: n8n
+    environment:
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_SCHEMA: public
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
+      DB_TYPE: "postgresdb"
+      GENERIC_TIMEZONE: "Europe/Lisbon"
+      N8N_EDITOR_BASE_URL: https://automation.mouras.me/
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_HOST: automation.mouras.me
+      N8N_PROTOCOL: https
+      N8N_RUNNERS_ENABLED: "true"
+      TZ: "Europe/Lisbon"
+      WEBHOOK_URL: https://automation.mouras.me/
+    image: n8nio/n8n
+    networks:
+      data:
+        ipv4_address: 10.50.0.9
+      messaging:
+        ipv4_address: 10.51.0.7
+      services:
+        ipv4_address: 10.52.0.9
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - ${N8N_DATA_DIR:-.n8n}:/home/node/.n8n
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:latest
+    networks:
+      services:
+        ipv4_address: 10.52.0.10
+    restart: unless-stopped
+    volumes:
+      - ${OLLAMA_DIR:-.ollama}:/root/.ollama
+  openwebui:
+    container_name: openwebui
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_API_BASE=http://ollama:11434
+    image: openwebui/open-webui:0.8
+    networks:
+      services:
+        ipv4_address: 10.52.0.11
+    ports:
+      - 8080:8080
+    restart: always
+    volumes:
+      - ${OPEN_WEBUI_DATA_DIR:-.open-webui/data}:/app/backend/data
+  pgadmin:
+    container_name: pgadmin
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin@pgadmin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-pgadmin}
+    image: dpage/pgadmin4:latest
+    networks:
+      services:
+        ipv4_address: 10.52.0.12
+      data:
+        ipv4_address: 10.50.0.10
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - ${PGADMIN_DATA_DIR:-.pgadmin}/servers.json:/pgadmin4/servers.json
+  portainer:
+    container_name: portainer
+    environment:
+      - PORTAINER_MANAGE_EXTERNAL_STACKS=1
+    image: portainer/portainer-ce
+    networks:
+      services:
+        ipv4_address: 10.52.0.13
+    ports:
+      - 9000:9000
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PORTAINER_DATA_DIR:-.portainer/data}:/data
+  rocketchat:
+    command:
+      - -c
+      - |
+        echo "=====> Waiting for MongoDB (mongodb:27017) to be ready before starting Rocket.Chat...";
+        for i in $(seq 1 60); do
+          if nc -z mongodb 27017 >/dev/null 2>&1; then
+            echo "=====> MongoDB is up - starting Rocket.Chat";
+            exec node main.js;
+          fi;
+          echo "=====> MongoDB not ready yet, retrying in 5 seconds...";
+          sleep 5;
+        done;
+        echo "=====> Giving up waiting for MongoDB after 5 minutes";
+        exit 1
+    container_name: rocketchat
+    entrypoint: sh
+    environment:
+      DEPLOY_METHOD: docker
+      DEPLOY_PLATFORM: compose
+      INSTANCE_IP: "${INSTANCE_IP:-}"
+      LICENSE_DEBUG: true
+      MONGO_URL: ${MONGO_URL:-mongodb://mongodb:27017/rocketchat?replicaSet=rs0}
+      OVERWRITE_SETTING_Prometheus_Enabled: true
+      OVERWRITE_SETTING_Prometheus_Port: "${METRICS_PORT:-9458}"
+      PORT: ${PORT:-3001}
+      REG_TOKEN: ${REG_TOKEN:-}
+      ROOT_URL: ${ROOT_URL:-http://localhost}
+      TRANSPORTER: "${NATS_URL-monolith+nats://nats:4222}"
+    expose:
+      - ${PORT:-3001}
+      - ${METRICS_PORT:-9458}
+    image: ${IMAGE:-registry.rocket.chat/rocketchat/rocket.chat}:${RELEASE:-8.0.1}
+    labels:
+      container_tag: "${COMPOSE_PROJECT_NAME:-rocketchat}#rocketchat"
+      prometheus.io/port: ${METRICS_PORT:-9458}
+      prometheus.io/scrape: "true"
+    logging:
+      driver: "json-file"
+    networks:
+      services:
+        ipv4_address: 10.52.0.14
+      data:
+        ipv4_address: 10.50.0.11
+      messaging:
+        ipv4_address: 10.51.0.5
+    ports:
+      - "${BIND_IP:-0.0.0.0}:${HOST_PORT:-3001}:${PORT:-3000}"
+      - "${BIND_IP:-0.0.0.0}:${METRICS_PORT:-9458}:${METRICS_PORT:-9458}"
+    restart: always
+  transmission:
+    container_name: transmission
+    environment:
+      - PASS=${TRANSMISSION_PASSWORD:-transmission}
+      - PGID=0
+      - PUID=0
+      - TZ=Etc/UTC
+      - USER=${TRANSMISSION_USERNAME:-transmission}
+      - WHITELIST=${TRANSMISSION_WHITELIST:-*.*.*.*}
+      - HOST_WHITELIST=${TRANSMISSION_WHITELIST:-*.*.*.*}
+    image: lscr.io/linuxserver/transmission:latest
+    networks:
+      services:
+        ipv4_address: 10.52.0.15
+    ports:
+      - 9091:9091
+      - 51413:51413
+      - 51413:51413/udp
+    restart: unless-stopped
+    volumes:
+      - ${TRANSMISSION_CONFIG_DIR:-.transmission/config}:/config
+      - ${TRANSMISSION_DOWNLOADS_DIR:-.transmission/downloads}:/downloads:rw
+  # MESSAGING NETWORK
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:openssl
+    networks:
+      messaging:
+        ipv4_address: 10.51.0.2
+    ports:
+      - 1883:1883
+    restart: unless-stopped
+    volumes:
+      - ${MOSQUITTO_DATA_DIR:-.mosquitto/data}:/mosquitto/data
+      - ${MOSQUITTO_CONFIG_DIR:-.mosquitto/config}:/mosquitto/config
+      - ${MOSQUITTO_LOGS_DIR:-.mosquitto/log}:/mosquitto/log
+  nats:
+    command: --http_port 8222
+    container_name: nats
+    expose:
+      - 4222
+      - 8222
+      - 6222
+    image: nats
+    labels:
+      container_tag: "${COMPOSE_PROJECT_NAME:-rocketchat}#nats"
+    logging:
+      driver: "json-file"
+    networks:
+      messaging:
+        ipv4_address: 10.51.0.3
+    ports:
+      - "${NATS_BIND_IP:-127.0.0.1}:${NATS_PORT_NUMBER:-4222}:4222"
+    restart: always
+  nats-exporter:
+    command:
+      - -healthz
+      - -varz
+      - "http://nats:8222"
+    container_name: nats-exporter
+    depends_on:
+      - nats
+    expose:
+      - 7777
+    image: docker.io/natsio/prometheus-nats-exporter:${NATS_EXPORTER_VERSION:-0.17.3}
+    networks:
+      messaging:
+        ipv4_address: 10.51.0.4
+  # DATA NETWORK
+  mongodb:
+    container_name: mongodb
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        echo "=====> Waiting for /data/db to be owned by uid=$$MONGODB_USER_ID (mongodb user) ...";
+        for i in $(seq 1 60); do
+          owner="$(stat -c %u /data/db 2>/dev/null || true)";
+          if [ "$$owner" = "$$MONGODB_USER_ID" ]; then
+            echo "=====> /data/db ownership OK ($$owner) - starting MongoDB";
+            exec mongod --replSet "$$MONGODB_REPLICA_SET_NAME" --bind_ip_all;
+          fi;
+          echo "=====> /data/db owner is '$$owner' (expected $$MONGODB_USER_ID), retrying in 5 seconds...";
+          sleep 5;
+        done;
+        echo "=====> Giving up waiting for /data/db ownership after 5 minutes";
+        exit 1
+    environment:
+      ALLOW_EMPTY_PASSWORD: ${ALLOW_EMPTY_PASSWORD:-yes}
+      MONGODB_ADVERTISED_HOSTNAME: ${MONGODB_ADVERTISED_HOSTNAME:-mongodb}
+      MONGODB_PORT_NUMBER: ${MONGODB_PORT_NUMBER:-27017}
+      MONGODB_REPLICA_SET_NAME: ${MONGODB_REPLICA_SET_NAME:-rs0}
+      MONGODB_USER_ID: ${MONGODB_USER_ID:-1001}
+    healthcheck:
+      interval: 30s
+      retries: 10
+      start_period: 30s
+      test:
+        - CMD
+        - mongosh
+        - "mongodb://${MONGODB_ADVERTISED_HOSTNAME:-mongodb}:${MONGODB_PORT_NUMBER:-27017}/?directConnection=true"
+        - --eval
+        - '"db.adminCommand(''ping'')"'
+      timeout: 10s
+    image: docker.io/mongodb/mongodb-community-server:${MONGODB_VERSION:-8.2}-ubi8
+    labels:
+      container_tag: "${COMPOSE_PROJECT_NAME:-rocketchat}#mongodb"
+    logging:
+      driver: "json-file"
+    networks:
+      data:
+        ipv4_address: 10.50.0.2
+    ports:
+      - "${MONGODB_BIND_IP:-127.0.0.1}:${MONGODB_PORT_NUMBER:-27017}:${MONGODB_PORT_NUMBER:-27017}"
+    restart: always
+    user: "${MONGODB_USER_ID:-1001}"
+    volumes:
+      - ${MONGODB_HOST_PATH:-.mongodb/data}:/data/db:rw
+  mongodb-exporter:
+    command:
+      - --mongodb.uri=${MONGODB_URI:-mongodb://mongodb:27017}
+      - --collect-all
+      - --compatible-mode
+    container_name: mongodb-exporter
+    depends_on:
+      - mongodb
+    expose:
+      - 9216
+    image: docker.io/percona/mongodb_exporter:${MONGODB_EXPORTER_VERSION:-0.44.0}
+    networks:
+      data:
+        ipv4_address: 10.50.0.3
+    restart: unless-stopped
+  mongodb-fix-permission-container:
+    container_name: mongodb-fix-permissions
+    entrypoint: |
+      sh -xc '
+        owner="$(stat -c %u /data/db)";
+        # for fresh installs
+        if [ "$$owner" != "$$MONGODB_USER_ID" ]; then
+          echo "=====> Fixing directory ownership to uid $$MONGODB_USER_ID"
+          chown -R "$$MONGODB_USER_ID" /data/db;
+        else echo "=====> Nothing to do"; fi;
+      '
+    environment:
+      MONGODB_USER_ID: ${MONGODB_USER_ID:-1001}
+    image: docker.io/mongodb/mongodb-community-server:${MONGODB_VERSION:-8.2}-ubi8
+    networks:
+      data:
+        ipv4_address: 10.50.0.4
+    restart: always
+    user: "0"
+    volumes:
+      - ${MONGODB_HOST_PATH:-.mongodb/data}:/data/db:rw
+  mongodb-init-container:
+    container_name: mongodb-init
+    entrypoint: |
+      sh -xc '
+        echo "=====> Waiting for MongoDB to be healthy before initiating replica set...";
+        until mongosh "$$MONGODB_URI" --eval "db.adminCommand(\"ping\")" >/dev/null 2>&1; do
+          echo "=====> MongoDB not ready yet, retrying in 5 seconds...";
+          sleep 5;
+        done;
+        echo "=====> Initiating ReplSet $$MONGODB_REPLICA_SET_NAME at $$MONGODB_ADVERTISED_HOSTNAME:$$MONGODB_PORT_NUMBER...";
+        mongosh "$$MONGODB_URI" --eval "rs.initiate({_id: \"$$MONGODB_REPLICA_SET_NAME\", members: [{ _id: 0, host: \"$$MONGODB_ADVERTISED_HOSTNAME:$$MONGODB_PORT_NUMBER\" }]})";
+        echo "=====> Initiating ReplSet done...";
+      '
+    environment:
+      MONGODB_ADVERTISED_HOSTNAME: ${MONGODB_ADVERTISED_HOSTNAME:-mongodb}
+      MONGODB_PORT_NUMBER: ${MONGODB_PORT_NUMBER:-27017}
+      MONGODB_REPLICA_SET_NAME: ${MONGODB_REPLICA_SET_NAME:-rs0}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/?directConnection=true}
+    image: docker.io/mongodb/mongodb-community-server:${MONGODB_VERSION:-8.2}-ubi8
+    labels:
+      container_tag: "${COMPOSE_PROJECT_NAME:-rocketchat}#mongodb-init-container"
+    logging:
+      driver: "json-file"
+    networks:
+      data:
+        ipv4_address: 10.50.0.5
+    restart: always
+    user: "0"
+    volumes:
+      - ${MONGODB_HOST_PATH:-.mongodb/data}:/data/db:rw
+  postgres:
+    container_name: postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    image: postgres:15
+    networks:
+      data:
+        ipv4_address: 10.50.0.6
+    ports:
+      - 5432:5432
+    restart: always
+    shm_size: 128mb
+    volumes:
+      - ${POSTGRES_DATA_DIR:-.postgres/data}:/var/lib/postgresql/data
+  qdrant:
+    container_name: qdrant
+    image: qdrant/qdrant:v1.3.0
+    networks:
+      data:
+        ipv4_address: 10.50.0.7
+    ports:
+      - 6333:6333
+    restart: unless-stopped
+    volumes:
+      - ${QDRANT_DATA_DIR:-.qdrant/storage}:/qdrant/storage
+networks:
+  public:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.53.0.0/24
+  services:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.52.0.0/24
+  messaging:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.51.0.0/24
+  data:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.50.0.0/24
