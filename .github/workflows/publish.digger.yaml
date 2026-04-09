@@ -20,4 +20,4 @@ jobs:
       - name: List
         run: ls -la
       - name: Build Digger Image
-        run: docker build -t digger:latest -f ./infra/digger.dockerfile ./src/digger
+        run: docker build -t digger:latest -f ./infra/images/digger.dockerfile ./src/digger
