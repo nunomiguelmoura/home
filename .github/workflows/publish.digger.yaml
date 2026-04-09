@@ -1,5 +1,4 @@
-name: publish.digger
-run-name: Publish Digger
+name: Publish Digger
 on:
   push:
     branches:
