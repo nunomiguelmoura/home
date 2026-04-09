@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Curl
-        run: apt install curl -y
+        run: sudo apt install curl -y
       - name: Install Docker
-        run: curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
+        run: sudo curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
       - name: Checkout code
         uses: actions/checkout@v3
