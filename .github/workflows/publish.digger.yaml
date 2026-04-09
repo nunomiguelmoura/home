@@ -17,5 +17,7 @@ jobs:
         run: sudo curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh --dry-run
       - name: Checkout code
         uses: actions/checkout@v3
+      - name: List
+        run: ls -la
       - name: Build Digger Image
         run: docker build -t digger:latest -f ./home/infra/digger.dockerfile ./home/src/digger
